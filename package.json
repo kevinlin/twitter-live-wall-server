@@ -10,7 +10,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "debug": "^4.1.0",
+    "debug": "^4.3.1",
     "express": "^4.16.4",
     "http": "^0.0.0",
     "os": "^0.1.1",
