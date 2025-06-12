@@ -45,7 +45,7 @@ router.get('/stats', (req, res) => {
     res.json(getServerStats());
 });
 router.get('/room/:qry/stats', (req, res) => {
-    if (io.sockets.adapter.rooms[req.params.qry]) {
+    if (io.sockets.adapter.rooms.has(req.params.qry)) {
         res.json(getRoomStats(req.params.qry));
     }
     else {
@@ -57,7 +57,7 @@ app.use('/', router);
 const server = app.listen(app.get('port'), () => {
     console.log('server listening on port ' + app.get('port'));
 });
-const io = socketio(server, {'origins': '*:*'});
+const io = socketio(server, {cors: {origin: '*'}});
 const escapeHtml = (text = "") => {
     return text.replace(/&/g, "&amp;").replace(/>/g, "&gt;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
 };
@@ -81,12 +81,13 @@ io.on('connection', (client) => {
     });
 
     client.on('disconnect', () => {
-        Object.keys(io.sockets.adapter.rooms).map(query => {
+        for (const [query, sockets] of io.sockets.adapter.rooms) {
+            if (io.sockets.sockets.has(query)) continue;
             io.to(query).emit('qryUpdate', {
                 query: query,
-                clientsCount: Object.keys(io.sockets.adapter.rooms[query].sockets).length
+                clientsCount: sockets.size
             });
-        });
+        }
         io.emit('statsUpdate', getServerStats());
     });
 
@@ -96,14 +97,15 @@ io.on('connection', (client) => {
 function getServerStats() {
     return {
         clientsCount: io.engine.clientsCount - 1,
-        roomsCount: Object.keys(io.sockets.adapter.rooms).length - io.engine.clientsCount
+        roomsCount: io.sockets.adapter.rooms.size - io.sockets.sockets.size
     };
 }
 
 function getRoomStats(frq) {
+    const room = io.sockets.adapter.rooms.get(frq);
     return {
         frq: frq,
-        clientsCount: io.sockets.adapter.rooms[frq] ? io.sockets.adapter.rooms[frq].length : 0
+        clientsCount: room ? room.size : 0
     };
 }
 
@@ -123,7 +125,8 @@ function streamTweets(term, client) {
                 screenname: tweet.user.screen_name,
                 name: tweet.user.name
             };
-            var clientsCount = io.sockets.adapter.rooms[term] ? io.sockets.adapter.rooms[term].length : 0
+            var room = io.sockets.adapter.rooms.get(term);
+            var clientsCount = room ? room.size : 0
             if (clientsCount < 1) {
                 stream.destroy();
                 return;
